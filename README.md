@@ -4,7 +4,7 @@ A standalone browser-based audio/video test suite. No installation, external ass
 
 ## Run
 
-Open `index.html` in a current browser, or serve this directory with any static web host. The page starts with **AV Sync Test**, with audio muted. Click **Unmute** to enable sound.
+Open `index.html` in a current browser, or serve this directory with any static web host. The page starts with **AV Sync Test** and attempts to play audio automatically. If the browser blocks autoplay with sound, click **Unmute** once to enable it. A brief reminder appears only when sound has not started.
 
 Use the bottom-right menu to switch between the four patterns. Controls fade out after five seconds of inactivity and reappear when the mouse moves or the page receives keyboard/touch input.
 

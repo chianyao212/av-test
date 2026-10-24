@@ -42,7 +42,7 @@
 <script>
 'use strict';
 /* Standalone / offline. Timing constants are seconds; frequencies are Hz.
-   Animation starts silently on the performance clock; AudioContext is created only on Unmute.
+   Animation starts immediately; audio starts automatically when browser autoplay policy permits.
    After activation the audio schedule and animation share the audio output clock.
    440 Hz beep: every second. At even seconds, both 440 Hz and 1000 Hz play in L+R.
    Odd-second 440 Hz beeps alternate right, left, right, left.
@@ -54,7 +54,7 @@ const canvas=document.getElementById('card'), c=canvas.getContext('2d',{alpha:fa
 const muteButton=document.getElementById('mute'),fullButton=document.getElementById('fullscreen');
 const visualEpoch=performance.now();
 let audio=null,master=null,origin=0,nextBeat=0,scheduler=null,muted=true,raf=0,audioAligned=false;
-let noticeTimer=0,operationPending=false;
+let noticeTimer=0,audioWanted=true,autoplayTimer=0;
 let mode='av',previousFrame=null,motionTime=0,colorPhase=0,colorScrolling=false,needsRedraw=true,aspectTime=0,sweepEnabled=true;
 const controls=document.getElementById('controls'),patternMenu=document.getElementById('pattern-menu');
 const pauseButton=document.getElementById('pause'),levelSelect=document.getElementById('level'),scrollButton=document.getElementById('scroll-right'),sweepButton=document.getElementById('sweep');
@@ -311,23 +311,34 @@ function schedule(){
 function showNotice(message){clearTimeout(noticeTimer);document.getElementById('notice').textContent=message;noticeTimer=setTimeout(()=>document.getElementById('notice').textContent='',3000)}
 function updateMute(){muteButton.setAttribute('aria-pressed',String(muted));muteButton.setAttribute('aria-label',muted?'Unmute':'Mute');document.getElementById('mute-label').textContent=muted?'Unmute':'Mute';document.getElementById('sound-waves').setAttribute('d',muted?'m16 9 5 6m0-6-5 6':'M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14')}
 function setVolume(){if(master){master.gain.cancelScheduledValues(audio.currentTime);master.gain.setTargetAtTime(mode==='av'&&!muted?1:0,audio.currentTime,.003)}}
-async function toggleMute(){
- if(mode!=='av'||operationPending)return;
- if(!muted){muted=true;setVolume();updateMute();return}
- operationPending=true;
+function activateAudio(){
+ if(!audioWanted||!audio||audio.state!=='running')return;
+ if(!audioAligned)alignAudio();
+ muted=false;setVolume();updateMute();schedule();
+ if(scheduler===null)scheduler=setInterval(schedule,25);
+ clearTimeout(autoplayTimer);clearTimeout(noticeTimer);document.getElementById('notice').textContent='';
+}
+function requestAudio(automatic=false){
+ audioWanted=true;
  try{
-  // This function is called only by the user's Unmute click or M key gesture.
   if(!audio){const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)throw new Error('Audio playback is not supported. Please use a current browser.');audio=new Audio({latencyHint:'interactive'});master=audio.createGain();master.gain.value=0;master.connect(audio.destination);
-   audio.addEventListener('statechange',()=>{if(audio.state!=='running'){audioAligned=false;if(!muted){muted=true;setVolume();updateMute()}}});
+   audio.addEventListener('statechange',()=>{
+    if(audio.state==='running'){activateAudio();return}
+    audioAligned=false;
+    if(!muted){audioWanted=false;muted=true;setVolume();updateMute()}
+   });
   }
-  const needsAlignment=!audioAligned||audio.state!=='running';
-  await audio.resume();
-  if(audio.state!=='running')throw new Error('Audio is not enabled. Click Unmute to try again.');
-  if(needsAlignment)alignAudio();
-  muted=false;setVolume();updateMute();schedule();
-  if(scheduler===null)scheduler=setInterval(schedule,25);
-  clearTimeout(noticeTimer);document.getElementById('notice').textContent='';
- }catch(error){muted=true;updateMute();showNotice(error.message)}finally{operationPending=false}
+  // A blocked resume promise can stay pending until a user gesture. Never lock the button.
+  const resumed=audio.resume();
+  activateAudio();
+  Promise.resolve(resumed).then(activateAudio).catch(error=>{if(audioWanted&&muted)showNotice(automatic?'Click Unmute to enable sound.':error.message)});
+  if(automatic&&muted){clearTimeout(autoplayTimer);autoplayTimer=setTimeout(()=>{if(audioWanted&&muted&&mode==='av')showNotice('Click Unmute to enable sound.')},350)}
+ }catch(error){muted=true;updateMute();showNotice(error.message)}
+}
+function toggleMute(){
+ if(mode!=='av')return;
+ if(!muted){audioWanted=false;muted=true;setVolume();updateMute();return}
+ requestAudio();
 }
 function fullscreenState(){return Boolean(document.fullscreenElement||document.webkitFullscreenElement)}
 function updateFullscreen(){const full=fullscreenState();document.getElementById('fullscreen-label').textContent=full?'Exit fullscreen':'Fullscreen';fullButton.setAttribute('aria-label',full?'Exit fullscreen':'Enter fullscreen');document.getElementById('fullscreen-icon').setAttribute('d',full?'M3 8h5V3m8 0v5h5M8 21v-5H3m18 0h-5v5':'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5')}
@@ -338,7 +349,7 @@ document.addEventListener('keydown',event=>{if(event.repeat||event.altKey||event
 window.addEventListener('pagehide',()=>{clearTimeout(controlsTimer);clearInterval(scheduler);scheduler=null;cancelAnimationFrame(raf);if(audio)audio.suspend().catch(()=>{})});
 window.addEventListener('pageshow',event=>{if(event.persisted){audioAligned=false;muted=true;previousFrame=null;setVolume();updateMute();fitCanvas();cancelAnimationFrame(raf);render();showControls();if(mode==='av')showNotice('Click Unmute to enable sound.')}});
 fitCanvas();measureControls();render();showControls();
-showNotice('Click Unmute to enable sound.');
+requestAudio(true);
 </script>
 </body>
 </html>
