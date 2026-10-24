@@ -28,7 +28,7 @@
 </head>
 <body data-mode="av">
 <main id="stage">
-<canvas id="card" width="1920" height="1080" role="img" aria-label="AV sync test card: rotating pointers, a constant-speed triangular marker, alternating left/right flashes every second, a central sync flash every two seconds, and 30 fps timecode."></canvas>
+<canvas id="card" width="1920" height="1080" role="img" aria-label="AV sync test card: rotating pointers, a constant-speed triangular marker, stereo L/R flashes every two seconds and alternating right/left flashes in between, a central sync flash every two seconds, and 30 fps timecode."></canvas>
 </main>
 <div id="controls" role="group" aria-label="Test controls">
 <details id="pattern-menu"><summary aria-label="Choose test pattern"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></svg><span id="pattern-label">AV Sync Test</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary><nav class="pattern-options" aria-label="Test patterns"><button type="button" data-mode="av" aria-pressed="true">AV Sync Test</button><button type="button" data-mode="motion" aria-pressed="false">Motion Pattern</button><button type="button" data-mode="color" aria-pressed="false">Color Bars</button><button type="button" data-mode="aspect" aria-pressed="false">Aspect Ratio</button></nav></details>
@@ -44,7 +44,8 @@
 /* Standalone / offline. Timing constants are seconds; frequencies are Hz.
    Animation starts silently on the performance clock; AudioContext is created only on Unmute.
    After activation the audio schedule and animation share the audio output clock.
-   440 Hz beep: every second, alternating L/R. 1000 Hz: both channels every 2 seconds.
+   440 Hz beep: every second. At even seconds, both 440 Hz and 1000 Hz play in L+R.
+   Odd-second 440 Hz beeps alternate right, left, right, left.
    Both tones last 140 ms and start together at even seconds; the centre ring flashes then.
    The display uses the audio output timestamp when available to account for output buffering.
    Browser rendering, displays and audio devices can still introduce physical A/V delay. */
@@ -76,7 +77,7 @@ function digital(value,x,y,size=36){c.fillStyle=ink;c.font=`500 ${size}px ui-mon
 function pattern(x,y,kind){c.save();c.beginPath();c.rect(x,y,60,60);c.clip();c.fillStyle=ink;c.fillRect(x,y,60,60);if(kind===0||kind===3){for(let i=-60;i<120;i+=6)line(x+i,y,x+i+(kind===0?-60:60),y+60,2,gray)}else if(kind===1){for(let i=0;i<=60;i+=5)line(x+i,y,x+i,y+60,2,gray)}else{for(let i=0;i<=60;i+=5)line(x,y+i,x+60,y+i,2,gray)}c.restore()}
 function draw(t,active=true){
  const whole=Math.floor(t),phase=t-whole,flash=active&&phase<CONFIG.pulseDuration;
- const left=whole%2===0,centre=left&&flash;
+ const stereo=whole%2===0,left=stereo||whole%4===3,right=stereo||whole%4===1,centre=stereo&&flash;
  c.fillStyle=gray;c.fillRect(0,0,W,H);
  // Edge-to-edge 16:9 grid. Titles and metadata sit directly on the grid.
  for(let x=0;x<=W;x+=60)line(x,0,x,H,1,x%240===0?'#3b3b3b':'#282828');
@@ -104,8 +105,8 @@ function draw(t,active=true){
  c.beginPath();c.arc(1485,260,137,q,q+Math.PI/2);c.arc(1485,260,70,q+Math.PI/2,q,true);c.closePath();c.fillStyle=paper;c.fill();
  ring(1485,260);digital(String(whole%60).padStart(2,'0'),1485,260,64);
  label('FRAME '+String(Math.floor(phase*CONFIG.fps)).padStart(2,'0'),1485,435,22,'#aaa','center');
- // White annular flashes: centre at every 2 s tone, L/R at each 1 s beep.
- ring(960,540,centre,140);ring(435,820,flash&&left);ring(1485,820,flash&&!left);
+ // Even seconds: centre and both L/R rings. Odd seconds: alternate R, then L.
+ ring(960,540,centre,140);ring(435,820,flash&&left);ring(1485,820,flash&&right);
  label('L',435,816,64,ink,'center');label('R',1485,816,64,ink,'center');
  label('LEFT / 440 Hz',435,645,22,'#aaa','center');label('RIGHT / 440 Hz',1485,645,22,'#aaa','center');
  label('1 kHz',960,494,26,ink,'center');label('2 s',960,589,22,'#aaa','center');
@@ -294,7 +295,19 @@ function outputClock(){
 function visualTime(){return audioAligned&&audio&&audio.state==='running'?Math.max(0,outputClock()-origin):(performance.now()-visualEpoch)/1000}
 function alignAudio(){origin=outputClock()-(performance.now()-visualEpoch)/1000;nextBeat=Math.ceil(audio.currentTime-origin+.025);audioAligned=true}
 function tone(hz,when,pan,level){const oscillator=audio.createOscillator(),gain=audio.createGain(),stereo=audio.createStereoPanner();oscillator.type='sine';oscillator.frequency.value=hz;stereo.pan.value=pan;gain.gain.setValueAtTime(0,when);gain.gain.linearRampToValueAtTime(level,when+.003);gain.gain.setValueAtTime(level,when+CONFIG.pulseDuration-.005);gain.gain.linearRampToValueAtTime(0,when+CONFIG.pulseDuration);oscillator.connect(gain).connect(stereo).connect(master);oscillator.start(when);oscillator.stop(when+CONFIG.pulseDuration+.005);oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();stereo.disconnect()}}
-function schedule(){if(mode!=='av'||!audio||audio.state!=='running')return;if(!audioAligned)alignAudio();const now=audio.currentTime;while(origin+nextBeat<now-.01)nextBeat++;while(origin+nextBeat<now+CONFIG.lookAhead){const when=origin+nextBeat;tone(CONFIG.beepHz,when,nextBeat%2===0?-1:1,.20);if(nextBeat%2===0)tone(CONFIG.toneHz,when,0,.24);nextBeat++}}
+function schedule(){
+ if(mode!=='av'||!audio||audio.state!=='running')return;
+ if(!audioAligned)alignAudio();
+ const now=audio.currentTime;
+ while(origin+nextBeat<now-.01)nextBeat++;
+ while(origin+nextBeat<now+CONFIG.lookAhead){
+  const when=origin+nextBeat,stereo=nextBeat%2===0;
+  const pan=stereo?0:nextBeat%4===1?1:-1;
+  tone(CONFIG.beepHz,when,pan,.20);
+  if(stereo)tone(CONFIG.toneHz,when,0,.24);
+  nextBeat++;
+ }
+}
 function showNotice(message){clearTimeout(noticeTimer);document.getElementById('notice').textContent=message;noticeTimer=setTimeout(()=>document.getElementById('notice').textContent='',3000)}
 function updateMute(){muteButton.setAttribute('aria-pressed',String(muted));muteButton.setAttribute('aria-label',muted?'Unmute':'Mute');document.getElementById('mute-label').textContent=muted?'Unmute':'Mute';document.getElementById('sound-waves').setAttribute('d',muted?'m16 9 5 6m0-6-5 6':'M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14')}
 function setVolume(){if(master){master.gain.cancelScheduledValues(audio.currentTime);master.gain.setTargetAtTime(mode==='av'&&!muted?1:0,audio.currentTime,.003)}}
