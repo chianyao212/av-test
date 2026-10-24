@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AV Sync Test · AV Test Patterns</title>
+<style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font-family:system-ui,-apple-system,sans-serif}main{position:fixed;inset:0;display:grid;place-items:center}canvas{display:block;width:100%;height:100%;object-fit:contain}#controls{position:fixed;right:max(18px,env(safe-area-inset-right));bottom:max(18px,env(safe-area-inset-bottom));display:flex;align-items:center;gap:8px;z-index:2}button,select{min-height:42px;border:1px solid #777;border-radius:7px;background:#151515e8;color:#fff;padding:0 14px;font:500 13px system-ui;cursor:pointer;touch-action:manipulation}button:hover,select:hover{background:#333}button:focus-visible,select:focus-visible{outline:3px solid #ffd54a;outline-offset:3px}button{display:flex;align-items:center;justify-content:center;gap:8px}button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}#notice{position:fixed;right:max(18px,env(safe-area-inset-right));bottom:74px;max-width:calc(100% - 36px);padding:10px 14px;border:1px solid #777;border-radius:6px;background:#151515ed;font-size:13px;z-index:3}#notice:empty{display:none}@media(max-width:480px){#controls{right:10px;bottom:12px;gap:6px}button,select{min-height:38px;padding:0 10px;font-size:12px}#notice{right:10px;bottom:62px}}
+[hidden]{display:none!important}
+#controls{max-width:calc(100vw - 36px);flex-wrap:wrap;justify-content:flex-end;opacity:1;visibility:visible;transition:opacity .4s ease,visibility 0s}
+#controls.is-hidden{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .4s ease,visibility 0s .4s}
+.mode-actions{display:flex;align-items:center;gap:8px}
+#notice{bottom:calc(var(--controls-height,42px) + 32px + env(safe-area-inset-bottom))}
+#pattern-menu{position:relative}
+#pattern-menu summary{min-height:42px;display:flex;align-items:center;gap:9px;border:1px solid #777;border-radius:7px;background:#151515e8;padding:0 14px;font:500 13px system-ui;cursor:pointer;list-style:none;user-select:none;touch-action:manipulation}
+#pattern-menu summary::-webkit-details-marker{display:none}
+#pattern-menu summary:hover{background:#333}
+#pattern-menu summary:focus-visible{outline:3px solid #ffd54a;outline-offset:3px}
+#pattern-menu summary svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#pattern-menu[open] .chevron{transform:rotate(180deg)}
+.pattern-options{position:absolute;bottom:calc(100% + 10px);left:0;width:220px;max-width:calc(100vw - 36px);padding:6px;border:1px solid #666;border-radius:9px;background:#171717fa;box-shadow:0 10px 30px #0008}
+.pattern-options button{border:0;background:transparent;width:100%;justify-content:space-between;text-align:left;min-height:42px;padding:0 12px}
+.pattern-options button:hover{background:#303030}
+.pattern-options button[aria-pressed="true"]{background:#303030;color:#ffda4a}
+.pattern-options button[aria-pressed="true"]::after{content:'✓'}
+#scroll-right[aria-pressed="true"],#sweep[aria-pressed="true"]{color:#ffda4a;border-color:#ffda4a;background:#333024}
+@media(max-width:480px){#controls{max-width:calc(100vw - 20px)}.mode-actions{gap:6px}#pattern-menu summary{min-height:38px;padding:0 10px;font-size:12px}#notice{bottom:calc(var(--controls-height,38px) + 26px)}}
+</style>
+</head>
+<body data-mode="av">
+<main id="stage">
+<canvas id="card" width="1920" height="1080" role="img" aria-label="AV sync test card: rotating pointers, a constant-speed triangular marker, alternating left/right flashes every second, a central sync flash every two seconds, and 30 fps timecode."></canvas>
+</main>
+<div id="controls" role="group" aria-label="Test controls">
+<details id="pattern-menu"><summary aria-label="Choose test pattern"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></svg><span id="pattern-label">AV Sync Test</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary><nav class="pattern-options" aria-label="Test patterns"><button type="button" data-mode="av" aria-pressed="true">AV Sync Test</button><button type="button" data-mode="motion" aria-pressed="false">Motion Pattern</button><button type="button" data-mode="color" aria-pressed="false">Color Bars</button><button type="button" data-mode="aspect" aria-pressed="false">Aspect Ratio</button></nav></details>
+<div id="av-actions" class="mode-actions"><button class="control" id="mute" type="button" aria-label="Unmute" aria-pressed="true" title="Mute / Unmute (M)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4 5 9H2v6h3l6 5Z"/><path id="sound-waves" d="m16 9 5 6m0-6-5 6"/></svg><span id="mute-label">Unmute</span></button></div>
+<div id="motion-actions" class="mode-actions" hidden><button id="pause" type="button" aria-label="Pause" aria-pressed="false" title="Pause / Resume (Space)">Pause</button></div>
+<div id="color-actions" class="mode-actions" hidden><select id="level" aria-label="RGB signal level" title="RGB signal level"><option value="0.75">75% RGB Bars</option><option value="1">100% RGB Bars</option></select><button id="scroll-right" type="button" aria-label="Scroll right" aria-pressed="false" title="Toggle constant-speed scrolling to the right"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg><span>Scroll right</span></button></div>
+<div id="aspect-actions" class="mode-actions" hidden><button id="sweep" type="button" aria-label="Diagonal sweep" aria-pressed="true" title="Toggle slow top-left to bottom-right sweep"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 16 16m-8 0h8v-8M4 12V4h8"/></svg><span>Sweep</span></button></div>
+<button class="control" id="fullscreen" type="button" aria-label="Enter fullscreen" title="Fullscreen (F)"><svg viewBox="0 0 24 24" aria-hidden="true"><path id="fullscreen-icon" d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg><span id="fullscreen-label">Fullscreen</span></button>
+</div>
+<div id="notice" role="status" aria-live="polite"></div>
+<script>
+'use strict';
+/* Standalone / offline. Timing constants are seconds; frequencies are Hz.
+   Animation starts silently on the performance clock; AudioContext is created only on Unmute.
+   After activation the audio schedule and animation share the audio output clock.
+   440 Hz beep: every second, alternating L/R. 1000 Hz: both channels every 2 seconds.
+   Both tones last 140 ms and start together at even seconds; the centre ring flashes then.
+   The display uses the audio output timestamp when available to account for output buffering.
+   Browser rendering, displays and audio devices can still introduce physical A/V delay. */
+const CONFIG = Object.freeze({beepHz:440,toneHz:1000,pulseDuration:.14,fps:30,lookAhead:.20});
+const canvas=document.getElementById('card'), c=canvas.getContext('2d',{alpha:false});
+const muteButton=document.getElementById('mute'),fullButton=document.getElementById('fullscreen');
+const visualEpoch=performance.now();
+let audio=null,master=null,origin=0,nextBeat=0,scheduler=null,muted=true,raf=0,audioAligned=false;
+let noticeTimer=0,operationPending=false;
+let mode='av',previousFrame=null,motionTime=0,colorPhase=0,colorScrolling=false,needsRedraw=true,aspectTime=0,sweepEnabled=true;
+const controls=document.getElementById('controls'),patternMenu=document.getElementById('pattern-menu');
+const pauseButton=document.getElementById('pause'),levelSelect=document.getElementById('level'),scrollButton=document.getElementById('scroll-right'),sweepButton=document.getElementById('sweep');
+const W=1920,H=1080,TAU=Math.PI*2,ink='#eee',paper='#f0f0f0',gray='#171717';
+function line(x1,y1,x2,y2,width=2,color=ink){c.beginPath();c.strokeStyle=color;c.lineWidth=width;c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke()}
+function circle(x,y,r,width=4,color=ink){c.beginPath();c.arc(x,y,r,0,TAU);c.lineWidth=width;c.strokeStyle=color;c.stroke()}
+function fillCircle(x,y,r,color){c.beginPath();c.arc(x,y,r,0,TAU);c.fillStyle=color;c.fill()}
+function triangle(x,y,up,size=20,color=ink){c.beginPath();c.moveTo(x,y);c.lineTo(x-size,y+(up?size*1.6:-size*1.6));c.lineTo(x+size,y+(up?size*1.6:-size*1.6));c.closePath();c.fillStyle=color;c.fill()}
+function ring(x,y,lit=false,r=140){
+ if(lit)fillCircle(x,y,r-2,paper);
+ line(x-r,y,x+r,y,1,'#666');line(x,y-r,x,y+r,1,'#666');
+ fillCircle(x,y,70,gray);circle(x,y,70,2);circle(x,y,r,4);
+}
+function label(value,x,y,size=24,color=ink,align='left'){
+ c.save();c.shadowColor=gray;c.shadowBlur=6;
+ c.fillStyle=color;c.font=`500 ${size}px system-ui, sans-serif`;c.textAlign=align;c.textBaseline='middle';c.fillText(value,x,y);
+ c.restore();
+}
+function digital(value,x,y,size=36){c.fillStyle=ink;c.font=`500 ${size}px ui-monospace, SFMono-Regular, Menlo, monospace`;c.textAlign='center';c.textBaseline='middle';c.fillText(value,x,y)}
+function pattern(x,y,kind){c.save();c.beginPath();c.rect(x,y,60,60);c.clip();c.fillStyle=ink;c.fillRect(x,y,60,60);if(kind===0||kind===3){for(let i=-60;i<120;i+=6)line(x+i,y,x+i+(kind===0?-60:60),y+60,2,gray)}else if(kind===1){for(let i=0;i<=60;i+=5)line(x+i,y,x+i,y+60,2,gray)}else{for(let i=0;i<=60;i+=5)line(x,y+i,x+60,y+i,2,gray)}c.restore()}
+function draw(t,active=true){
+ const whole=Math.floor(t),phase=t-whole,flash=active&&phase<CONFIG.pulseDuration;
+ const left=whole%2===0,centre=left&&flash;
+ c.fillStyle=gray;c.fillRect(0,0,W,H);
+ // Edge-to-edge 16:9 grid. Titles and metadata sit directly on the grid.
+ for(let x=0;x<=W;x+=60)line(x,0,x,H,1,x%240===0?'#3b3b3b':'#282828');
+ for(let y=0;y<=H;y+=60)line(0,y,W,y,1,y%240===0?'#3b3b3b':'#282828');
+ c.strokeStyle='#555';c.lineWidth=2;c.strokeRect(1,1,W-2,H-2);
+ label('AV SYNC TEST',60,60,32);
+ label('AUDIO / VIDEO SYNCHRONIZATION',1860,60,24,'#aaa','right');
+ label('BEEP 1 s  /  TONE 2 s',1860,96,20,'#888','right');
+ label('1920 × 1080 REFERENCE  ·  30 FPS TIMECODE',60,1020,22,'#aaa');
+ // Opposing grayscale strips retain the reference card's visual structure.
+ for(let i=0;i<12;i++){const level=Math.round(255*(1-i/11));c.fillStyle=`rgb(${level},${level},${level})`;c.fillRect(90,190+i*55,54,55)}
+ const gradient=c.createLinearGradient(0,190,0,850);gradient.addColorStop(0,'#000');gradient.addColorStop(1,'#fff');c.fillStyle=gradient;c.fillRect(1776,190,54,660);
+ c.strokeStyle='#666';c.lineWidth=1;c.strokeRect(90,190,54,660);c.strokeRect(1776,190,54,660);
+ // Main sweep: one revolution per four seconds.
+ circle(960,540,400,4);line(960,140,960,940,1,'#666');
+ const angle=t*TAU/4-Math.PI/2;line(960,540,960+Math.cos(angle)*397,540+Math.sin(angle)*397,4);
+ for(const x of [720,1060]){pattern(x,270,0);pattern(x+80,270,1);pattern(x,350,2);pattern(x+80,350,3)}
+ // One-second rotary marker.
+ const a=t*TAU-Math.PI/2;
+ c.beginPath();c.arc(435,260,137,a,a+Math.PI/2);c.arc(435,260,70,a+Math.PI/2,a,true);c.closePath();c.fillStyle=paper;c.fill();
+ ring(435,260);line(435,260,435+Math.cos(a)*137,260+Math.sin(a)*137,3);fillCircle(435,260,6,ink);
+ label('1 s ROTATION',435,435,22,'#aaa','center');
+ // Seconds and frame counter, with the same system typography as the suite.
+ const quadrant=Math.floor(phase*4),q=-Math.PI/2+quadrant*Math.PI/2;
+ c.beginPath();c.arc(1485,260,137,q,q+Math.PI/2);c.arc(1485,260,70,q+Math.PI/2,q,true);c.closePath();c.fillStyle=paper;c.fill();
+ ring(1485,260);digital(String(whole%60).padStart(2,'0'),1485,260,64);
+ label('FRAME '+String(Math.floor(phase*CONFIG.fps)).padStart(2,'0'),1485,435,22,'#aaa','center');
+ // White annular flashes: centre at every 2 s tone, L/R at each 1 s beep.
+ ring(960,540,centre,140);ring(435,820,flash&&left);ring(1485,820,flash&&!left);
+ label('L',435,816,64,ink,'center');label('R',1485,816,64,ink,'center');
+ label('LEFT / 440 Hz',435,645,22,'#aaa','center');label('RIGHT / 440 Hz',1485,645,22,'#aaa','center');
+ label('1 kHz',960,494,26,ink,'center');label('2 s',960,589,22,'#aaa','center');
+ // Constant 600 px/s, immediate endpoint reversal; centre crossings stay at 0, 2, 4... s.
+ line(360,540,1560,540,4);
+ for(let i=0;i<=20;i++)line(360+i*60,528,360+i*60,552,2);
+ triangle(360,540,false,15);triangle(1560,540,false,15);triangle(960,540,false,15);
+ const travel=(t+1)%4;
+ const marker=360+600*(travel<=2?travel:4-travel);triangle(marker,544,true,18,'#ffda4a');
+ const colors=['#bfbfbf','#bfbf00','#00bfbf','#00bf00','#bf00bf','#bf0000','#0000bf'];
+ colors.forEach((v,i)=>{c.fillStyle=v;c.fillRect(680+i*80,730,80,70)});
+ const frames=Math.floor(t*CONFIG.fps+1e-5),ff=frames%30,ss=Math.floor(frames/30)%60,mm=Math.floor(frames/1800)%60,hh=Math.floor(frames/108000)%100;
+ digital([hh,mm,ss,ff].map(v=>String(v).padStart(2,'0')).join(':'),960,862,38);
+ label('HH:MM:SS:FF',960,910,18,'#888','center');
+}
+
+const motionPattern=(()=>{
+function text(value,x,y,size=24,color='#eee',align='left'){c.fillStyle=color;c.font=`500 ${size}px system-ui, sans-serif`;c.textAlign=align;c.textBaseline='middle';c.fillText(value,x,y)}
+function line(x,y,x2,y2,color='#fff',width=2){c.beginPath();c.strokeStyle=color;c.lineWidth=width;c.moveTo(x,y);c.lineTo(x2,y2);c.stroke()}
+
+
+
+ const speeds=[240,480,960],tops=[150,430,710],targetWidth=156;
+ let paused=false;
+function movingX(t,speed){return ((t*speed+260)%(W+targetWidth))-targetWidth}
+function draw(t){
+ c.fillStyle='#101010';c.fillRect(0,0,W,H);
+ text('MOTION PATTERN',60,60,32);text('CONSTANT SPEED  /  LEFT → RIGHT',1860,60,24,'#aaa','right');
+ for(let lane=0;lane<3;lane++){
+  const y=tops[lane],bg=['#202020','#808080','#ececec'][lane],fg=lane===2?'#111':'#fff';
+  c.fillStyle=bg;c.fillRect(0,y,W,250);
+  for(let x=0;x<=W;x+=120)line(x,y+66,x,y+240,lane===2?'#ccc':lane===1?'#999':'#333',1);
+  text(String(speeds[lane]).padStart(3,'0')+' px/s',60,y+32,26,fg);
+  text(['SLOW','MEDIUM','FAST'][lane],1860,y+32,22,fg,'right');
+  const x=movingX(t,speeds[lane]),cy=y+152;
+  // Black/white edges and fine stripes reveal blur and trailing on light/dark fields.
+  c.fillStyle='#000';c.fillRect(x,cy-65,targetWidth,130);
+  c.fillStyle='#fff';c.fillRect(x+4,cy-61,targetWidth-8,122);
+  c.fillStyle='#000';c.fillRect(x+12,cy-53,50,106);
+  for(let i=0;i<10;i++){c.fillStyle=i%2?'#fff':'#000';c.fillRect(x+72+i*7,cy-53,7,106)}
+  c.fillStyle='#ffda4a';c.fillRect(x+targetWidth/2-2,cy-65,4,130);
+ }
+ text('1920 × 1080 REFERENCE  ·  THREE CONSTANT VELOCITIES',60,1015,22,'#aaa');
+ text(paused?'PAUSED':t.toFixed(2)+' s',1860,1015,24,'#ddd','right');
+}
+
+ return {draw,isPaused:()=>paused,togglePause(){paused=!paused;return paused}};
+})();
+const aspectPattern=(()=>{
+function text(value,x,y,size=24,color='#eee',align='left'){c.fillStyle=color;c.font=`500 ${size}px system-ui, sans-serif`;c.textAlign=align;c.textBaseline='middle';c.fillText(value,x,y)}
+function line(x,y,x2,y2,color='#fff',width=2){c.beginPath();c.strokeStyle=color;c.lineWidth=width;c.moveTo(x,y);c.lineTo(x2,y2);c.stroke()}
+
+
+// Slow, linear diagonal sweep. The full band leaves the image before it loops.
+function drawSweep(t){
+ const halfWidth=90,margin=160;
+ // Normalize the sweep to the 16:9 rectangle, rather than a 45-degree pixel line.
+ // At the midpoint, the bright line joins (0,H) to (W,0) exactly.
+ const diagonal=Math.hypot(W,H),nx=H/diagonal,ny=W/diagonal;
+ const cornerDistance=W*H/diagonal;
+ const position=((t%14)/14)*(2*cornerDistance+2*margin)-margin;
+ const glow=c.createLinearGradient(nx*(position-halfWidth),ny*(position-halfWidth),nx*(position+halfWidth),ny*(position+halfWidth));
+ glow.addColorStop(0,'rgba(255,255,255,0)');
+ glow.addColorStop(.28,'rgba(255,255,255,.025)');
+ glow.addColorStop(.46,'rgba(255,255,255,.13)');
+ glow.addColorStop(.5,'rgba(255,255,255,.24)');
+ glow.addColorStop(.54,'rgba(255,255,255,.13)');
+ glow.addColorStop(.72,'rgba(255,255,255,.025)');
+ glow.addColorStop(1,'rgba(255,255,255,0)');
+ c.save();c.globalCompositeOperation='screen';c.fillStyle=glow;c.fillRect(0,0,W,H);
+ const crossing=position/cornerDistance;
+ line(0,crossing*H,crossing*W,0,'rgba(255,255,255,.42)',2);
+ c.restore();
+}
+function drawGeometry(t=0,sweepEnabled=true){
+ c.fillStyle='#171717';c.fillRect(0,0,W,H);
+ for(let x=0;x<=W;x+=60)line(x,0,x,H,x%240===0?'#444':'#303030',1);
+ for(let y=0;y<=H;y+=60)line(0,y,W,y,y%240===0?'#444':'#303030',1);
+ // Draw light below outlines and labels so geometry remains readable.
+ if(sweepEnabled)drawSweep(t);
+ c.strokeStyle='#eee';c.lineWidth=4;c.strokeRect(2,2,W-4,H-4);
+ c.strokeStyle='#f6cf62';c.lineWidth=3;c.strokeRect(48,27,1824,1026);
+ c.strokeStyle='#58d9e9';c.strokeRect(96,54,1728,972);
+ c.save();c.setLineDash([14,12]);line(240,0,240,H,'#a9b5c4',3);line(1680,0,1680,H,'#a9b5c4',3);c.restore();
+ line(0,540,W,540,'#666',2);line(960,0,960,H,'#666',2);
+ c.beginPath();c.arc(960,540,400,0,Math.PI*2);c.strokeStyle='#fff';c.lineWidth=5;c.stroke();
+ c.strokeStyle='#fff';c.lineWidth=4;c.strokeRect(810,390,300,300);
+ line(920,540,1000,540,'#fff',4);line(960,500,960,580,'#fff',4);
+ // Corner registration marks remain easy to see when the image is cropped.
+ for(const [x,y,sx,sy] of [[120,90,1,1],[1800,90,-1,1],[120,990,1,-1],[1800,990,-1,-1]]){line(x,y,x+50*sx,y,'#fff',5);line(x,y,x,y+50*sy,'#fff',5)}
+ for(let i=0;i<=20;i++){const x=i*W/20,y=i*H/20;line(x,0,x,i%2===0?18:10,'#fff',2);line(x,H,x,H-(i%2===0?18:10),'#fff',2);line(0,y,i%2===0?18:10,y,'#fff',2);line(W,y,W-(i%2===0?18:10),y,'#fff',2)}
+ text('ASPECT RATIO / GEOMETRY',136,118,28);text('16:9  ·  1920 × 1080',1784,118,26,'#fff','right');
+ text('4:3',258,190,26,'#a9b5c4');text('4:3',1662,190,26,'#a9b5c4','right');
+ text('CIRCLE MUST BE ROUND',960,304,29,'#fff','center');text('SQUARE',960,445,24,'#fff','center');
+ text('GRID CELLS MUST BE SQUARE / ALL FOUR EDGES MUST BE VISIBLE',960,805,26,'#ddd','center');
+ text('95% FRAME',136,942,23,'#f6cf62');text('90% FRAME',136,978,23,'#58d9e9');
+ text('60 × 60 GRID',1784,978,23,'#aaa','right');
+}
+
+ return {draw:drawGeometry};
+})();
+// Browser RGB code values. Rightward scrolling is linear and wraps without gaps.
+function drawColorBars(){
+ const width=canvas.width,height=canvas.height,high=Math.round(255*Number(levelSelect.value));
+ const colors=[[high,high,high],[high,high,0],[0,high,high],[0,high,0],[high,0,high],[high,0,0],[0,0,high]];
+ const shift=Math.round(colorPhase*width);
+ for(let copy=-1;copy<=1;copy++)colors.forEach((rgb,i)=>{
+  const left=Math.round(i*width/7),right=Math.round((i+1)*width/7);
+  c.fillStyle=`rgb(${rgb.join(',')})`;c.fillRect(left+shift+copy*width,0,right-left,height);
+ });
+}
+function fitCanvas(){
+ const color=mode==='color',dpr=window.devicePixelRatio||1;
+ const width=color?Math.max(1,Math.round(window.innerWidth*dpr)):W;
+ const height=color?Math.max(1,Math.round(window.innerHeight*dpr)):H;
+ if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height}
+ canvas.style.objectFit=color?'fill':'contain';needsRedraw=true;
+}
+function render(now=performance.now()){
+ const dt=previousFrame===null?0:Math.max(0,(now-previousFrame)/1000);previousFrame=now;
+ if(mode==='av')draw(visualTime());
+ else if(mode==='motion'){if(!motionPattern.isPaused())motionTime+=dt;motionPattern.draw(motionTime)}
+ else if(mode==='color'){if(colorScrolling)colorPhase=(colorPhase+dt/10)%1;if(needsRedraw||colorScrolling)drawColorBars()}
+ else if(mode==='aspect'){if(sweepEnabled)aspectTime+=dt;if(sweepEnabled||needsRedraw)aspectPattern.draw(aspectTime,sweepEnabled)}
+ needsRedraw=false;raf=requestAnimationFrame(render);
+}
+const patternNames={av:'AV Sync Test',motion:'Motion Pattern',color:'Color Bars',aspect:'Aspect Ratio'};
+const descriptions={
+ av:canvas.getAttribute('aria-label'),
+ motion:'Constant-speed motion test: three targets move right at 240, 480 and 960 reference pixels per second.',
+ color:'RGB color bars: white/gray, yellow, cyan, green, magenta, red and blue.',
+ aspect:'16:9 geometry test with a circle, square grid, 4:3 reference area, 90% and 95% frames, and a slow top-left to bottom-right light sweep.'
+};
+function measureControls(){document.documentElement.style.setProperty('--controls-height',controls.getBoundingClientRect().height+'px')}
+function setMode(next){
+ if(!Object.hasOwn(patternNames,next))return;
+ mode=next;document.body.dataset.mode=mode;
+ document.getElementById('pattern-label').textContent=patternNames[mode];
+ document.title=patternNames[mode]+' · AV Test Patterns';
+ document.getElementById('av-actions').hidden=mode!=='av';
+ document.getElementById('motion-actions').hidden=mode!=='motion';
+ document.getElementById('color-actions').hidden=mode!=='color';
+ document.getElementById('aspect-actions').hidden=mode!=='aspect';
+ document.querySelectorAll('[data-mode]').forEach(button=>{if(button.tagName==='BUTTON')button.setAttribute('aria-pressed',String(button.dataset.mode===mode))});
+ canvas.setAttribute('aria-label',descriptions[mode]);
+ patternMenu.open=false;previousFrame=null;fitCanvas();setVolume();
+ clearTimeout(noticeTimer);document.getElementById('notice').textContent='';
+ if(mode==='av')schedule();
+ showControls();measureControls();
+}
+function togglePause(){const paused=motionPattern.togglePause();pauseButton.textContent=paused?'Resume':'Pause';pauseButton.setAttribute('aria-label',paused?'Resume':'Pause');pauseButton.setAttribute('aria-pressed',String(paused));needsRedraw=true;showControls()}
+function toggleSweep(){sweepEnabled=!sweepEnabled;sweepButton.setAttribute('aria-pressed',String(sweepEnabled));needsRedraw=true;showControls()}
+function toggleScroll(){colorScrolling=!colorScrolling;scrollButton.setAttribute('aria-pressed',String(colorScrolling));needsRedraw=true;showControls()}
+// Fade the entire toolbar after five seconds without input, including mode controls.
+let controlsTimer=0,keyboardNavigation=false,nativeSelectOpen=false;
+function hideControls(){
+ if(patternMenu.open||nativeSelectOpen||(keyboardNavigation&&controls.contains(document.activeElement))){controlsTimer=setTimeout(hideControls,5000);return}
+ controls.classList.add('is-hidden');
+}
+function showControls(){clearTimeout(controlsTimer);controls.classList.remove('is-hidden');controlsTimer=setTimeout(hideControls,5000)}
+document.addEventListener('pointermove',showControls,{passive:true});
+document.addEventListener('mousemove',showControls,{passive:true});
+document.addEventListener('mousedown',()=>{keyboardNavigation=false;showControls()},{passive:true});
+document.addEventListener('pointerdown',event=>{keyboardNavigation=false;if(!patternMenu.contains(event.target))patternMenu.open=false;if(event.target!==levelSelect)nativeSelectOpen=false;showControls()},{passive:true});
+document.addEventListener('keydown',event=>{if(event.key==='Tab')keyboardNavigation=true;if(event.key==='Escape'){nativeSelectOpen=false;patternMenu.open=false}showControls()});
+controls.addEventListener('focusin',showControls);
+controls.addEventListener('focusout',()=>{keyboardNavigation=false;showControls()});
+patternMenu.addEventListener('toggle',showControls);
+levelSelect.addEventListener('pointerdown',()=>{nativeSelectOpen=!nativeSelectOpen;showControls()});
+levelSelect.addEventListener('blur',()=>{nativeSelectOpen=false;showControls()});
+levelSelect.addEventListener('change',()=>{nativeSelectOpen=false;needsRedraw=true;showControls()});
+levelSelect.addEventListener('keydown',event=>{if(event.key==='Escape'||event.key==='Enter')nativeSelectOpen=false});
+document.querySelectorAll('.pattern-options button').forEach(button=>button.addEventListener('click',()=>{setMode(button.dataset.mode);patternMenu.querySelector('summary').focus({preventScroll:true})}));
+pauseButton.addEventListener('click',togglePause);scrollButton.addEventListener('click',toggleScroll);sweepButton.addEventListener('click',toggleSweep);
+window.addEventListener('resize',()=>{fitCanvas();measureControls()});
+document.addEventListener('fullscreenchange',()=>{fitCanvas();showControls()});
+document.addEventListener('webkitfullscreenchange',()=>{fitCanvas();showControls()});
+document.addEventListener('visibilitychange',()=>{previousFrame=null;if(!document.hidden){needsRedraw=true;showControls()}});
+if(typeof ResizeObserver!=='undefined')new ResizeObserver(measureControls).observe(controls);
+function outputClock(){
+ let outputTime;
+ if(typeof audio.getOutputTimestamp==='function'){const stamp=audio.getOutputTimestamp();if(stamp.contextTime>0&&stamp.performanceTime>0)outputTime=Math.min(audio.currentTime,stamp.contextTime+Math.max(0,(performance.now()-stamp.performanceTime)/1000))}
+ if(!Number.isFinite(outputTime))outputTime=audio.currentTime-(audio.baseLatency||0)-(audio.outputLatency||0);
+ return outputTime;
+}
+function visualTime(){return audioAligned&&audio&&audio.state==='running'?Math.max(0,outputClock()-origin):(performance.now()-visualEpoch)/1000}
+function alignAudio(){origin=outputClock()-(performance.now()-visualEpoch)/1000;nextBeat=Math.ceil(audio.currentTime-origin+.025);audioAligned=true}
+function tone(hz,when,pan,level){const oscillator=audio.createOscillator(),gain=audio.createGain(),stereo=audio.createStereoPanner();oscillator.type='sine';oscillator.frequency.value=hz;stereo.pan.value=pan;gain.gain.setValueAtTime(0,when);gain.gain.linearRampToValueAtTime(level,when+.003);gain.gain.setValueAtTime(level,when+CONFIG.pulseDuration-.005);gain.gain.linearRampToValueAtTime(0,when+CONFIG.pulseDuration);oscillator.connect(gain).connect(stereo).connect(master);oscillator.start(when);oscillator.stop(when+CONFIG.pulseDuration+.005);oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();stereo.disconnect()}}
+function schedule(){if(mode!=='av'||!audio||audio.state!=='running')return;if(!audioAligned)alignAudio();const now=audio.currentTime;while(origin+nextBeat<now-.01)nextBeat++;while(origin+nextBeat<now+CONFIG.lookAhead){const when=origin+nextBeat;tone(CONFIG.beepHz,when,nextBeat%2===0?-1:1,.20);if(nextBeat%2===0)tone(CONFIG.toneHz,when,0,.24);nextBeat++}}
+function showNotice(message){clearTimeout(noticeTimer);document.getElementById('notice').textContent=message;noticeTimer=setTimeout(()=>document.getElementById('notice').textContent='',3000)}
+function updateMute(){muteButton.setAttribute('aria-pressed',String(muted));muteButton.setAttribute('aria-label',muted?'Unmute':'Mute');document.getElementById('mute-label').textContent=muted?'Unmute':'Mute';document.getElementById('sound-waves').setAttribute('d',muted?'m16 9 5 6m0-6-5 6':'M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14')}
+function setVolume(){if(master){master.gain.cancelScheduledValues(audio.currentTime);master.gain.setTargetAtTime(mode==='av'&&!muted?1:0,audio.currentTime,.003)}}
+async function toggleMute(){
+ if(mode!=='av'||operationPending)return;
+ if(!muted){muted=true;setVolume();updateMute();return}
+ operationPending=true;
+ try{
+  // This function is called only by the user's Unmute click or M key gesture.
+  if(!audio){const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)throw new Error('Audio playback is not supported. Please use a current browser.');audio=new Audio({latencyHint:'interactive'});master=audio.createGain();master.gain.value=0;master.connect(audio.destination);
+   audio.addEventListener('statechange',()=>{if(audio.state!=='running'){audioAligned=false;if(!muted){muted=true;setVolume();updateMute()}}});
+  }
+  const needsAlignment=!audioAligned||audio.state!=='running';
+  await audio.resume();
+  if(audio.state!=='running')throw new Error('Audio is not enabled. Click Unmute to try again.');
+  if(needsAlignment)alignAudio();
+  muted=false;setVolume();updateMute();schedule();
+  if(scheduler===null)scheduler=setInterval(schedule,25);
+  clearTimeout(noticeTimer);document.getElementById('notice').textContent='';
+ }catch(error){muted=true;updateMute();showNotice(error.message)}finally{operationPending=false}
+}
+function fullscreenState(){return Boolean(document.fullscreenElement||document.webkitFullscreenElement)}
+function updateFullscreen(){const full=fullscreenState();document.getElementById('fullscreen-label').textContent=full?'Exit fullscreen':'Fullscreen';fullButton.setAttribute('aria-label',full?'Exit fullscreen':'Enter fullscreen');document.getElementById('fullscreen-icon').setAttribute('d',full?'M3 8h5V3m8 0v5h5M8 21v-5H3m18 0h-5v5':'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5')}
+async function toggleFullscreen(){try{if(fullscreenState()){const exit=document.exitFullscreen||document.webkitExitFullscreen;if(exit)await exit.call(document)}else{const request=document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen;if(!request){showNotice('This browser does not support page fullscreen. Use the browser fullscreen command.');return}await request.call(document.documentElement)}}catch(error){showNotice('Unable to switch fullscreen: '+error.message)}updateFullscreen()}
+muteButton.addEventListener('click',toggleMute);fullButton.addEventListener('click',toggleFullscreen);
+document.addEventListener('fullscreenchange',updateFullscreen);document.addEventListener('webkitfullscreenchange',updateFullscreen);
+document.addEventListener('keydown',event=>{if(event.repeat||event.altKey||event.ctrlKey||event.metaKey)return;const key=event.key.toLowerCase();if(key==='m'&&mode==='av'){event.preventDefault();toggleMute()}else if(key==='f'){event.preventDefault();toggleFullscreen()}else if(event.code==='Space'&&mode==='motion'&&!['BUTTON','SUMMARY','SELECT'].includes(event.target.tagName)){event.preventDefault();togglePause()}});
+window.addEventListener('pagehide',()=>{clearTimeout(controlsTimer);clearInterval(scheduler);scheduler=null;cancelAnimationFrame(raf);if(audio)audio.suspend().catch(()=>{})});
+window.addEventListener('pageshow',event=>{if(event.persisted){audioAligned=false;muted=true;previousFrame=null;setVolume();updateMute();fitCanvas();cancelAnimationFrame(raf);render();showControls();if(mode==='av')showNotice('Click Unmute to enable sound.')}});
+fitCanvas();measureControls();render();showControls();
+showNotice('Click Unmute to enable sound.');
+</script>
+</body>
+</html>
